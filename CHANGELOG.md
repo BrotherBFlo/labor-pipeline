@@ -68,3 +68,9 @@
   + emp_pop_ratio: NEW — 59.2 (2026-05-01)
   + emp_pop_ratio_prime: NEW — 80.8 (2026-05-01)
   + emp_rate_15_64: NEW — 71.7 (2025-09-01)
+
+## 2026-06-25 21:12
+  (baseline established)
+
+## 2026-06-25 21:31
+  (baseline established)

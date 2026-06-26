@@ -88,6 +88,16 @@ table.calc th{text-align:left;color:var(--muted);font-weight:600;border-bottom:2
 table.calc td{vertical-align:top;border-bottom:1px solid var(--line);padding:8px 10px}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#33415c}
 .calcnote{font-size:11.5px;color:var(--muted);margin-top:3px}
+.mfilter{position:relative;display:inline-block;margin:2px 2px 10px}
+.mbtn{font-size:12px;padding:5px 11px;border:1px solid var(--line);background:#fff;border-radius:7px;cursor:pointer;color:var(--ink)}
+.mbtn:hover{border-color:var(--accent)}
+.mfilter .mpanel{display:none;position:absolute;z-index:50;top:32px;left:0;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 18px rgba(16,24,40,.14);padding:8px 10px;width:215px;max-height:300px;overflow:auto}
+.mfilter.open .mpanel{display:block}
+.mpanel-act{display:flex;gap:12px;margin-bottom:6px;border-bottom:1px solid var(--line);padding-bottom:6px;position:sticky;top:0;background:#fff}
+.mpanel-act a{cursor:pointer;font-size:12px;color:var(--accent);font-weight:600}
+.mlist label{display:block;font-size:11.5px;padding:2px 1px;cursor:pointer;white-space:nowrap}
+.mlist input{margin-right:7px;vertical-align:-1px}
+.mlist .yrhdr{font-weight:700;color:var(--muted);margin:6px 0 2px;font-size:11px;letter-spacing:.04em}
 @media(max-width:820px){.grid{grid-template-columns:1fr}}
 """
 
@@ -136,7 +146,12 @@ def _build_dashboard(chart_items, moved_lines, datasets, ts):
         parts.append(f"<div class='section'>{escape(section)}</div>")
         for c in by_section[section]:
             parts.append("<div class='card'>")
-            parts.append(c["div"])
+            parts.append(
+                "<div class='mfilter'><button class='mbtn' type='button'>Months &#9662;</button>"
+                "<div class='mpanel'><div class='mpanel-act'>"
+                "<a class='mall'>All</a><a class='mnone'>None</a></div>"
+                "<div class='mlist'></div></div></div>")
+            parts.append("<div class='chartholder'>" + c["div"] + "</div>")
             parts.append(f"<div class='note'>{escape(c['note'])}</div></div>")
 
     # calculations & definitions
@@ -174,8 +189,90 @@ def _build_dashboard(chart_items, moved_lines, datasets, ts):
 
     parts.append("<div class='foot'>BLS &amp; Census via FRED · ADP via FRED · "
                  "Indeed Hiring Lab (CC BY 4.0). Personal research dashboard.</div>")
+    parts.append(_MONTH_FILTER_JS)
     parts.append("</div></body></html>")
     return "".join(parts)
+
+
+# Per-chart month multiselect. Reads each chart's data after Plotly renders,
+# builds a year-grouped checkbox dropdown, and filters traces on change.
+_MONTH_FILTER_JS = """
+<script>
+(function(){
+  var clickBound=false, tries=0;
+  // Plotly 6 may store x/y as plain arrays, typed arrays, or base64 specs
+  // ({dtype,bdata}). Normalize any of them to a plain JS array.
+  var DT={f8:Float64Array,f4:Float32Array,i4:Int32Array,i2:Int16Array,i1:Int8Array,
+          u1:Uint8Array,u2:Uint16Array,u4:Uint32Array};
+  function arr(v){
+    if(v==null) return [];
+    if(Array.isArray(v)) return v;
+    if(ArrayBuffer.isView(v)) return Array.from(v);
+    if(typeof v==='object' && v.bdata!==undefined){
+      try{ var b=atob(v.bdata), n=b.length, by=new Uint8Array(n);
+        for(var i=0;i<n;i++) by[i]=b.charCodeAt(i);
+        return Array.from(new (DT[v.dtype]||Float64Array)(by.buffer)); }
+      catch(e){ return []; }
+    }
+    try{ return Array.from(v); }catch(e){ return []; }
+  }
+  function init(){
+    var pending=0;
+    document.querySelectorAll('.card').forEach(function(card){
+      var gd=card.querySelector('.plotly-graph-div');
+      var dd=card.querySelector('.mfilter');
+      if(!gd||!dd) return;
+      if(dd.dataset.ready) return;
+      if(!gd.data||!gd.data.length){ pending++; return; }
+      try{ setup(card,gd,dd); dd.dataset.ready='1'; }
+      catch(e){ /* leave for retry / skip */ }
+    });
+    if(!clickBound){ clickBound=true;
+      document.addEventListener('click',function(){
+        document.querySelectorAll('.mfilter.open').forEach(function(d){d.classList.remove('open');});});
+    }
+    if(pending>0 && tries++<30){ setTimeout(init,200); }
+  }
+  function setup(card,gd,dd){
+      var orig=gd.data.map(function(t){return {x:arr(t.x),y:arr(t.y)};});
+      var seen={};
+      orig.forEach(function(t){t.x.forEach(function(v){var m=String(v).slice(0,7);
+        if(/^\\d{4}-\\d{2}$/.test(m)) seen[m]=1;});});
+      var months=Object.keys(seen).sort();
+      var list=dd.querySelector('.mlist'), btn=dd.querySelector('.mbtn');
+      var curYr=null;
+      months.forEach(function(m){
+        var yr=m.slice(0,4);
+        if(yr!==curYr){curYr=yr; var h=document.createElement('div'); h.className='yrhdr'; h.textContent=yr; list.appendChild(h);}
+        var lab=document.createElement('label');
+        lab.innerHTML='<input type="checkbox" value="'+m+'" checked>'+m;
+        list.appendChild(lab);
+      });
+      function setLabel(n){ btn.innerHTML='Months ('+n+'/'+months.length+') &#9662;'; }
+      setLabel(months.length);
+      function apply(){
+        var sel={}, n=0;
+        list.querySelectorAll('input:checked').forEach(function(i){sel[i.value]=1;n++;});
+        var xs=[], ys=[];
+        orig.forEach(function(t){var nx=[],ny=[];
+          for(var i=0;i<t.x.length;i++){ if(sel[String(t.x[i]).slice(0,7)]){nx.push(t.x[i]);ny.push(t.y[i]);} }
+          xs.push(nx); ys.push(ny);});
+        Plotly.restyle(gd,{x:xs,y:ys});
+        setLabel(n);
+      }
+      list.addEventListener('change',apply);
+      btn.addEventListener('click',function(e){e.stopPropagation(); dd.classList.toggle('open');});
+      dd.querySelector('.mpanel').addEventListener('click',function(e){e.stopPropagation();});
+      dd.querySelector('.mall').addEventListener('click',function(e){e.preventDefault();
+        list.querySelectorAll('input').forEach(function(i){i.checked=true;}); apply();});
+      dd.querySelector('.mnone').addEventListener('click',function(e){e.preventDefault();
+        list.querySelectorAll('input').forEach(function(i){i.checked=false;}); apply();});
+  }
+  if(document.readyState==='complete'){ init(); }
+  else { window.addEventListener('load',init); }
+})();
+</script>
+"""
 
 
 # ---------------------------------------------------------------------------

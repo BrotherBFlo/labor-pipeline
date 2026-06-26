@@ -217,11 +217,15 @@ def build(fred_frames, fred_meta, indeed, nyfed=None, nyfed_rows=None, geo=None)
     weekly = _wide_from_fred(fred_frames, fred_meta, "weekly")
 
     written = {}
+    start = pd.Timestamp(config.OBSERVATION_START)
     for name, df in [("monthly", monthly), ("quarterly", quarterly),
                      ("weekly", weekly), ("daily", daily_df)]:
         if df.empty:
             print(f"  [skip] {name}: no columns")
             continue
+        # clip BEFORE writing AND before charting — Indeed-derived columns reach
+        # back to 2019/2020, so the in-memory frame must be windowed too.
+        df = df[df.index >= start]
         path, ncols, nrows = _write_pair(df, name)
         written[name] = df
         print(f"  [ok] {name:<10} {ncols:>2} cols x {nrows:>4} rows -> {path.name}")
