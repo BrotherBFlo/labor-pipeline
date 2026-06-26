@@ -187,6 +187,25 @@ INDEED_FILES = [
          concept="Indeed share of postings mentioning AI/GenAI"),
 ]
 
+# Optional geo postings (state + metro). Written to their own long files, NOT
+# merged into daily.csv (too many series). Metro is ~1.4M rows / 60MB raw, so it
+# is filtered to GEO_FOCUS_METROS on write.
+INDEED_GEO = [
+    dict(key="state_postings", repo="job_postings_tracker", branch="master",
+         path="US/state_job_postings_us.csv", entity="state",
+         concept="Indeed job postings index by US state"),
+    dict(key="metro_postings", repo="job_postings_tracker", branch="master",
+         path="US/metro_job_postings_us.csv", entity="metro",
+         concept="Indeed job postings index by US metro (CBSA)"),
+]
+# States charted in the geo overlay (lowercase, matching Indeed's 'state' column).
+GEO_FOCUS_STATES = ["ca", "tx", "ny", "fl", "wa", "dc"]
+# Metro name substrings used both to subset the metro file and to chart it.
+GEO_FOCUS_METROS = [
+    "New York", "Los Angeles", "San Francisco", "San Jose", "Seattle",
+    "Austin", "Chicago", "Dallas", "Boston", "Washington-Arlington",
+]
+
 # White-collar vs in-person sector composites built from job_postings_by_sector.
 # Sector names must match Indeed's 'display_name' / sector column values.
 INDEED_WHITE_COLLAR_SECTORS = [
@@ -213,6 +232,8 @@ CAVEATS = [
     "The Oct 2025 federal appropriations-lapse data gap is PRESERVED as NaN, not "
     "interpolated. Missing values from FRED ('.') are coerced to NaN.",
     "Sources: BLS via FRED; Census Business Formation Statistics via FRED; "
-    "Indeed Hiring Lab (CC BY 4.0). New-graduate entry (NY Fed) is a quarterly "
-    "overlay, annotated separately — not forced into the monthly frequency file.",
+    "Indeed Hiring Lab (CC BY 4.0). New-graduate entry (NY Fed) is a separate "
+    "overlay — kept in its own file, not forced into the monthly frequency file.",
+    "NY Fed recent-grad series are monthly 3-month moving averages (NSA), updated "
+    "quarterly. Source: NY Fed, Labor Market for Recent College Graduates.",
 ]

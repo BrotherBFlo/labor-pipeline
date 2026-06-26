@@ -235,6 +235,49 @@ def _u6_u3_wedge(m):
     return _finalize(fig, "U-6 minus U-3 wedge (bucket-2 proxy: marginal attachment + involuntary part-time)", CITE_BLS)
 
 
+def _nyfed_unemp(n):
+    cols = [("nyfed_recent_grad_unemp", "Recent grads (21-27)", INDEP),
+            ("nyfed_college_grad_unemp", "All college grads", ACCENTS[3]),
+            ("nyfed_all_worker_unemp", "All workers", GOV),
+            ("nyfed_young_worker_unemp", "All young workers", ACCENTS[5])]
+    if not any(_has(n, [c]) for c, _, _ in cols):
+        return None
+    fig = go.Figure()
+    for c, label, color in cols:
+        if _has(n, [c]):
+            w = 2.4 if c == "nyfed_recent_grad_unemp" else 1.6
+            fig.add_trace(go.Scatter(x=n.index, y=n[c], name=label, line=dict(color=color, width=w)))
+    fig.update_yaxes(title_text="unemployment rate (%)")
+    return _finalize(fig, "New-entrant axis — recent-grad unemployment (NY Fed)",
+                     "Source: NY Fed, Labor Market for Recent College Graduates (monthly 3-mo MA).")
+
+
+def _nyfed_underemp(n):
+    cols = [("nyfed_recent_grad_underemp", "Recent grads", INDEP),
+            ("nyfed_college_grad_underemp", "All college grads", ACCENTS[3])]
+    if not any(_has(n, [c]) for c, _, _ in cols):
+        return None
+    fig = go.Figure()
+    for c, label, color in cols:
+        if _has(n, [c]):
+            fig.add_trace(go.Scatter(x=n.index, y=n[c], name=label, line=dict(color=color, width=2)))
+    fig.update_yaxes(title_text="underemployment rate (%)")
+    return _finalize(fig, "New-entrant axis — recent-grad underemployment (NY Fed)",
+                     "Source: NY Fed. Underemployment = working a job that doesn't require a degree.")
+
+
+def _geo(pivot, title):
+    if pivot is None or pivot.empty:
+        return None
+    fig = go.Figure()
+    for i, col in enumerate(pivot.columns):
+        fig.add_trace(go.Scatter(x=pivot.index, y=pivot[col], name=str(col).upper()
+                                 if len(str(col)) <= 3 else str(col),
+                                 line=dict(color=ACCENTS[i % len(ACCENTS)], width=1.6)))
+    fig.update_yaxes(title_text="postings index (Feb 2020=100)")
+    return _finalize(fig, title, CITE_INDEED)
+
+
 def _ai_share(d):
     if not _has(d, ["indeed_ai_share"]):
         return None
@@ -253,6 +296,8 @@ def build_all(datasets):
     q = datasets.get("quarterly")
     w = datasets.get("weekly")
     d = datasets.get("daily")
+    n = datasets.get("nyfed")
+    geo = datasets.get("geo_focus") or {}
 
     specs = [
         # (id, section, builder, note)
@@ -282,6 +327,16 @@ def build_all(datasets):
          "The expanding workforce: the denominator behind every rate."),
         ("ai_share", "Thesis overlay", _ai_share(d),
          "AI-as-buyer thesis: rising share of postings referencing AI/GenAI."),
+        ("nyfed_unemp", "New-entrant axis (NY Fed)", _nyfed_unemp(n),
+         "Recent grads now face HIGHER unemployment than all workers — a reversal of the historical edge."),
+        ("nyfed_underemp", "New-entrant axis (NY Fed)", _nyfed_underemp(n),
+         "Share of recent grads in jobs that don't require a degree."),
+        ("geo_states", "Geo — postings by state/metro", _geo(geo.get("state"),
+         "Job postings index — selected states"),
+         "Independent state-level demand read."),
+        ("geo_metros", "Geo — postings by state/metro", _geo(geo.get("metro"),
+         "Job postings index — selected metros"),
+         "Independent metro-level demand read (tech-heavy metros worth watching)."),
     ]
 
     out = []

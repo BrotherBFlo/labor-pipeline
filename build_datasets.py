@@ -148,7 +148,55 @@ def _write_pair(df, name):
     return wide_path, len(df.columns), len(df)
 
 
-def build(fred_frames, fred_meta, indeed):
+def _write_geo(geo):
+    """Write state (full) + metro (focus-subset) long files; return focus pivots."""
+    focus = {}
+    extra_rows = []
+    st = geo.get("state_postings")
+    if st is not None:
+        s = st.copy()
+        s["date"] = pd.to_datetime(s["date"])
+        s.to_csv(config.DATA_DIR / "indeed_state_postings.csv", index=False, date_format="%Y-%m-%d")
+        f = s[s["state"].isin(config.GEO_FOCUS_STATES)]
+        focus["state"] = f.pivot_table(index="date", columns="state",
+                                       values="indeed_job_postings_index").sort_index()
+        print(f"  [ok] geo state    {s.shape[0]:>7} rows -> indeed_state_postings.csv")
+        extra_rows.append(dict(column="indeed_state_postings", file="indeed_state_postings.csv",
+            source="Indeed Hiring Lab (CC BY 4.0)", series_id="state_job_postings_us",
+            concept="Job postings index by US state (long: date, state, index)",
+            unit="index (Feb 2020=100)", frequency="daily",
+            seasonal_adjustment="Seasonally Adjusted", bucket="flow", lens="", derived="no"))
+    mt = geo.get("metro_postings")
+    if mt is not None:
+        m = mt.copy()
+        m["date"] = pd.to_datetime(m["date"])
+        mask = m["metro"].str.contains("|".join(config.GEO_FOCUS_METROS), case=False, na=False)
+        m = m[mask]
+        m.to_csv(config.DATA_DIR / "indeed_metro_postings.csv", index=False, date_format="%Y-%m-%d")
+        focus["metro"] = m.pivot_table(index="date", columns="metro",
+                                       values="indeed_job_postings_index").sort_index()
+        print(f"  [ok] geo metro    {m.shape[0]:>7} rows (focus subset) -> indeed_metro_postings.csv")
+        extra_rows.append(dict(column="indeed_metro_postings", file="indeed_metro_postings.csv",
+            source="Indeed Hiring Lab (CC BY 4.0)", series_id="metro_job_postings_us",
+            concept="Job postings index by US metro/CBSA (long; filtered to focus metros)",
+            unit="index (Feb 2020=100)", frequency="daily",
+            seasonal_adjustment="Seasonally Adjusted", bucket="flow", lens="", derived="no"))
+    return focus, extra_rows
+
+
+def _write_nyfed(nyfed_df):
+    if nyfed_df is None or nyfed_df.empty:
+        return
+    df = nyfed_df.sort_index()
+    df.index.name = "date"
+    df.to_csv(config.DATA_DIR / "nyfed_recent_grads.csv", date_format="%Y-%m-%d")
+    long = (df.reset_index().melt(id_vars="date", var_name="series", value_name="value")
+              .dropna(subset=["value"]).sort_values(["series", "date"]))
+    long.to_csv(config.DATA_DIR / "nyfed_recent_grads_long.csv", index=False, date_format="%Y-%m-%d")
+    print(f"  [ok] nyfed        {df.shape[1]} series x {len(df)} months -> nyfed_recent_grads.csv")
+
+
+def build(fred_frames, fred_meta, indeed, nyfed=None, nyfed_rows=None, geo=None):
     print("\nAssembling frequency-partitioned datasets...")
     daily_df, monthly_add_df, indeed_rows = _shape_indeed(indeed)
 
@@ -173,12 +221,24 @@ def build(fred_frames, fred_meta, indeed):
         written[name] = df
         print(f"  [ok] {name:<10} {ncols:>2} cols x {nrows:>4} rows -> {path.name}")
 
+    # ---- NY Fed new-entrant overlay (separate file) -----------------------
+    _write_nyfed(nyfed)
+    if nyfed is not None and not nyfed.empty:
+        written["nyfed"] = nyfed
+
+    # ---- optional geo (separate long files) -------------------------------
+    geo_focus, geo_rows = ({}, [])
+    if geo:
+        geo_focus, geo_rows = _write_geo(geo)
+    written["geo_focus"] = geo_focus
+
     # ---- data dictionary --------------------------------------------------
-    _write_sources(fred_meta, indeed_rows, monthly, daily_df)
+    _write_sources(fred_meta, indeed_rows, monthly, daily_df,
+                   extra_rows=(nyfed_rows or []) + geo_rows)
     return written
 
 
-def _write_sources(fred_meta, indeed_rows, monthly, daily_df):
+def _write_sources(fred_meta, indeed_rows, monthly, daily_df, extra_rows=None):
     rows = []
     file_for_freq = {"monthly": "monthly.csv", "quarterly": "quarterly.csv",
                      "weekly": "weekly.csv", "daily": "daily.csv"}
@@ -218,6 +278,14 @@ def _write_sources(fred_meta, indeed_rows, monthly, daily_df):
             "part-time-for-economic-reasons; bucket-2 proxy)", unit="percentage points",
             frequency="Monthly", seasonal_adjustment="Seasonally Adjusted", bucket="2",
             lens="", resolved_via="", derived="yes",
+        ))
+    for r in (extra_rows or []):
+        rows.append(dict(
+            column=r["column"], file=r.get("file", "nyfed_recent_grads.csv"),
+            source=r["source"], series_id=r["series_id"], concept=r["concept"],
+            unit=r["unit"], frequency=r.get("frequency", "Monthly (3-mo MA)"),
+            seasonal_adjustment=r["seasonal_adjustment"], bucket=r["bucket"],
+            lens=r.get("lens", "") or "", resolved_via="", derived=r.get("derived", "no"),
         ))
     cols = ["column", "file", "source", "series_id", "concept", "unit", "frequency",
             "seasonal_adjustment", "bucket", "lens", "derived", "resolved_via"]

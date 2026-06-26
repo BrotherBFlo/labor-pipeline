@@ -82,6 +82,33 @@ def fetch_indeed_files():
     return out
 
 
+def fetch_geo_files():
+    """Return {key: DataFrame} for the optional state/metro geo files."""
+    out = {}
+    for spec in config.INDEED_GEO:
+        repo, branch, path, key = spec["repo"], spec["branch"], spec["path"], spec["key"]
+        content = _fetch_raw(repo, branch, path)
+        via = "raw"
+        if content is None:
+            try:
+                content = _fetch_via_tarball(repo, branch, path)
+                via = "tarball"
+            except Exception as e:
+                print(f"  [WARN] Indeed geo {key}: tarball fallback failed ({e})")
+                continue
+        if content is None:
+            print(f"  [WARN] Indeed geo {key}: not found")
+            continue
+        try:
+            df = pd.read_csv(io.BytesIO(content))
+        except Exception as e:
+            print(f"  [WARN] Indeed geo {key}: parse failed ({e})")
+            continue
+        out[key] = df
+        print(f"  [ok] indeed-geo:{key:<24} {df.shape[0]:>8} rows x {df.shape[1]} cols  ({via})")
+    return out
+
+
 if __name__ == "__main__":
     files = fetch_indeed_files()
     for k, df in files.items():

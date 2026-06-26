@@ -45,3 +45,14 @@
 
 ## 2026-06-25 18:04
   ▼ eci_wages: 177.5 (2026-01-01) -> 175.3 (2026-01-01)  [-2.24]
+
+## 2026-06-25 18:14
+  + nyfed_all_worker_unemp: NEW — 4.227 (2026-03-01)
+  + nyfed_college_grad_underemp: NEW — 34.27 (2026-03-01)
+  + nyfed_college_grad_unemp: NEW — 3.073 (2026-03-01)
+  + nyfed_recent_grad_underemp: NEW — 41.49 (2026-03-01)
+  + nyfed_recent_grad_unemp: NEW — 5.628 (2026-03-01)
+  + nyfed_young_worker_unemp: NEW — 7.244 (2026-03-01)
+
+## 2026-06-25 18:15
+  (baseline established)

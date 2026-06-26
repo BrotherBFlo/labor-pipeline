@@ -18,6 +18,7 @@ import pandas as pd
 import config
 import fetch_fred
 import fetch_indeed
+import fetch_nyfed
 import build_datasets
 import charts
 
@@ -29,6 +30,8 @@ def _latest_values(datasets):
     """Last non-NaN value + date for every column across all frequency files."""
     snap = {}
     for freq, df in datasets.items():
+        if not isinstance(df, pd.DataFrame):  # skip geo_focus dict etc.
+            continue
         for col in df.columns:
             s = df[col].dropna()
             if s.empty:
@@ -109,7 +112,7 @@ def _build_dashboard(chart_items, moved_lines, datasets, ts):
         "formation, self-employment, the U-6−U-3 wedge, quits. No clean national monthly severance series.</div>"
         "<div><b>Bucket 3 — truly unemployed without pay.</b> Unemployment level/rate, U-6, continued UI claims.</div>"
         "<div><b>Secondary axis — the expanding workforce.</b> Civilian labor force &amp; participation "
-        "(the denominator). New-grad entry (NY Fed) is a quarterly overlay, annotated separately.</div>"
+        "(the denominator). New-grad entry (NY Fed) is charted as a separate overlay below.</div>"
         "</div></div>")
 
     # what moved
@@ -120,7 +123,8 @@ def _build_dashboard(chart_items, moved_lines, datasets, ts):
     # charts by section
     section_order = ["Triangulation", "Bucket dashboard — flows", "White-collar lens",
                      "Bucket 2 — paid not producing", "Bucket 3 — unemployed",
-                     "Secondary axis — denominator", "Thesis overlay"]
+                     "Secondary axis — denominator", "New-entrant axis (NY Fed)",
+                     "Geo — postings by state/metro", "Thesis overlay"]
     ordered = [s for s in section_order if s in by_section] + \
               [s for s in by_section if s not in section_order]
     for section in ordered:
@@ -166,11 +170,14 @@ def run(verify_only=False):
     fred_frames, fred_meta, reso_log = fetch_fred.fetch_all(key)
     (config.DATA_DIR / "_resolution_log.json").write_text(json.dumps(reso_log, indent=2))
 
-    print("\n[2/5] Indeed Hiring Lab pulls...")
+    print("\n[2/5] Indeed Hiring Lab pulls (core + geo)...")
     indeed = fetch_indeed.fetch_indeed_files()
+    geo = fetch_indeed.fetch_geo_files()
+    nyfed_df, nyfed_rows = fetch_nyfed.fetch_nyfed()
 
     print("\n[3/5] Build datasets...")
-    datasets = build_datasets.build(fred_frames, fred_meta, indeed)
+    datasets = build_datasets.build(fred_frames, fred_meta, indeed,
+                                    nyfed=nyfed_df, nyfed_rows=nyfed_rows, geo=geo)
 
     print("\n[4/5] Charts...")
     chart_items = charts.build_all(datasets)
