@@ -67,8 +67,10 @@ Pulls everything, writes `data/`, regenerates `charts/`, and writes a dated dash
 
 ```
 data/
-  monthly.csv  quarterly.csv  weekly.csv  daily.csv     # wide, date-indexed
+  monthly.csv  quarterly.csv  weekly.csv  daily.csv     # wide, date-indexed (core frequency partition)
   monthly_long.csv ...                                  # tidy long variants
+  nyfed_recent_grads.csv                                # NY Fed new-entrant axis (separate, not merged)
+  indeed_state_postings.csv  indeed_metro_postings.csv  # optional geo (long; metro = focus subset)
   sources.csv                                           # data dictionary (col -> source/id/unit/SA/bucket)
   _resolution_log.json                                  # how each FRED id resolved
   _last_values.json                                     # snapshot for the "what moved" diff
@@ -98,8 +100,10 @@ AI-postings-share overlay.
 - **Indeed Hiring Lab** — job postings, posted-wage growth, AI postings share. CC BY 4.0;
   cited on every Indeed chart. No key. Pulled from `raw.githubusercontent.com` with a
   `codeload` tarball fallback if GitHub rate-limits.
-- **NY Fed** "Labor Market for Recent College Graduates" — quarterly recent-grad
-  unemployment/underemployment. Annotated overlay for the new-entrant axis.
+- **NY Fed** "Labor Market for Recent College Graduates" — recent-grad
+  unemployment/underemployment, pulled from the published `.xlsx` (monthly 3-mo MA,
+  updated quarterly). Kept in its own file `nyfed_recent_grads.csv` as the
+  new-entrant axis — never merged into the core frequency partition.
 
 ## Scheduling (macOS)
 
