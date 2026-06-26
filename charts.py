@@ -50,20 +50,27 @@ def _has(df, cols):
 # Triangulation
 # ---------------------------------------------------------------------------
 def _tri_payrolls_vs_adp(m):
+    # Actual levels, NOT indexed. BLS comes from FRED in thousands of persons,
+    # ADP in persons (1000x apart) — convert both to MILLIONS of persons so the
+    # real headcounts are directly comparable. ADP-private lines up against
+    # USPRIV (total private); PAYEMS is total nonfarm (adds ~23M govt etc.).
     if not _has(m, ["payems"]):
         return None
     fig = go.Figure()
     if _has(m, ["payems"]):
-        fig.add_trace(go.Scatter(x=m.index, y=m["payems"], name="BLS total nonfarm (PAYEMS)",
-                                 line=dict(color=GOV, width=2)))
+        fig.add_trace(go.Scatter(x=m.index, y=m["payems"] / 1e3, name="BLS total nonfarm (PAYEMS)",
+                                 line=dict(color=GOV, width=2),
+                                 hovertemplate="%{y:.2f}M"))
     if _has(m, ["uspriv"]):
-        fig.add_trace(go.Scatter(x=m.index, y=m["uspriv"], name="BLS total private (USPRIV)",
-                                 line=dict(color=GOV, width=1.4, dash="dot")))
+        fig.add_trace(go.Scatter(x=m.index, y=m["uspriv"] / 1e3, name="BLS total private (USPRIV)",
+                                 line=dict(color=GOV, width=1.6, dash="dot"),
+                                 hovertemplate="%{y:.2f}M"))
     if _has(m, ["adp_priv"]):
-        fig.add_trace(go.Scatter(x=m.index, y=m["adp_priv"], name="ADP private (independent)",
-                                 line=dict(color=INDEP, width=2)))
-    fig.update_yaxes(title_text="thousands of persons")
-    return _finalize(fig, "Payroll employment — BLS vs ADP (independent)", CITE_TRI)
+        fig.add_trace(go.Scatter(x=m.index, y=m["adp_priv"] / 1e6, name="ADP private (independent)",
+                                 line=dict(color=INDEP, width=2),
+                                 hovertemplate="%{y:.2f}M"))
+    fig.update_yaxes(title_text="millions of persons (actual levels)")
+    return _finalize(fig, "Payroll employment — BLS vs ADP (actual levels, millions of persons)", CITE_TRI)
 
 
 def _tri_openings_vs_postings(m):
@@ -302,7 +309,8 @@ def build_all(datasets):
     specs = [
         # (id, section, builder, note)
         ("payrolls_vs_adp", "Triangulation", _tri_payrolls_vs_adp(m),
-         "Gov vs independent payroll count. Watch for persistent ADP-vs-BLS gaps."),
+         "Actual levels (millions of persons), not indexed. Compare ADP-private "
+         "directly against USPRIV (total private); the gap to PAYEMS is government + other."),
         ("openings_vs_postings", "Triangulation", _tri_openings_vs_postings(m),
          "JOLTS lags ~5 weeks; Indeed is near-real-time — divergence flags turning points early."),
         ("earnings_vs_posted_wages", "Triangulation", _tri_earnings_vs_wages(m),
