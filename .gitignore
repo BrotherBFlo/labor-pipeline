@@ -9,6 +9,7 @@ __pycache__/
 
 # Generated outputs (regenerated each run; keep the dirs via .gitkeep)
 data/*.csv
+data/*.json
 charts/*.html
 charts/*.png
 dashboard/*.html
