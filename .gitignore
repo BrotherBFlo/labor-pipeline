@@ -14,5 +14,8 @@ charts/*.html
 charts/*.png
 dashboard/*.html
 
+# Scheduler output
+run.log
+
 # OS
 .DS_Store
