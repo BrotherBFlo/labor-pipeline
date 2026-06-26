@@ -1,5 +1,7 @@
 # labor-pipeline — triangulated U.S. labor-market "hidden economics"
 
+<sub>By Bryan Flores · co-authored with Claude (Anthropic).</sub>
+
 A small, reproducible pipeline that pulls U.S. labor, employment, and income time
 series from **multiple independent sources**, partitions them into files **by
 frequency**, builds analytical charts, and re-runs on a schedule so the view stays
