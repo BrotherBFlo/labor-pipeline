@@ -77,6 +77,17 @@ FRED_SERIES = [
          concept="Labor force participation rate"),
     dict(key="labor_force",   series_id="CLF16OV",      freq="monthly", bucket="sec", lens=None,
          concept="Civilian labor force level"),
+    # Employment ratios — answer "what share of the working-age pop is employed?"
+    # CIVPART's denominator is everyone 16+ (incl. retirees) and its numerator
+    # includes the unemployed; these isolate employed ÷ a tighter age base.
+    dict(key="emp_pop_ratio", series_id="EMRATIO",      freq="monthly", bucket="sec", lens=None,
+         concept="Employment-population ratio, 16+ (employed ÷ civ. noninstitutional pop 16+)"),
+    dict(key="emp_rate_15_64", series_id="LREM64TTUSM156S", freq="monthly", bucket="sec", lens=None,
+         concept="Employment rate, 15-64 working age (employed ÷ pop 15-64; ≈ your 18-65 ask)"),
+    dict(key="emp_pop_ratio_prime", series_id="LNS12300060", freq="monthly", bucket="sec", lens=None,
+         concept="Employment-population ratio, prime age 25-54 (employed ÷ pop 25-54)"),
+    dict(key="civpart_prime", series_id="LNS11300060",  freq="monthly", bucket="sec", lens=None,
+         concept="Labor force participation rate, prime age 25-54"),
     dict(key="emp_level",     series_id="CE16OV",       freq="monthly", bucket="1",   lens=None,
          concept="Civilian employment level"),
     dict(key="unemploy",      series_id="UNEMPLOY",     freq="monthly", bucket="3",   lens=None,
@@ -219,6 +230,61 @@ INDEED_WHITE_COLLAR_SECTORS = [
 INDEED_IN_PERSON_SECTORS = [
     "Nursing", "Food Preparation & Service", "Cleaning & Sanitation",
     "Childcare", "Loading & Stocking",
+]
+
+# ---------------------------------------------------------------------------
+# Calculations & definitions — surfaced verbatim in the dashboard so every
+# metric's formula and source series are visible. kind: 'definition' (how the
+# published rate is constructed) or 'derived' (computed in this pipeline).
+# ---------------------------------------------------------------------------
+CALCULATIONS = [
+    # --- participation / employment ratios (the denominator question) ------
+    dict(kind="definition", metric="Labor force participation rate (CIVPART)",
+         formula="(Employed + Unemployed, 16+) ÷ Civilian noninstitutional population 16+ × 100",
+         sources="CIVPART (published). Numerator = CLF16OV; denominator = CNP16OV.",
+         note="Denominator includes everyone 16+ — retirees, students, etc. Numerator counts the "
+              "unemployed too. This is NOT employed ÷ total population."),
+    dict(kind="definition", metric="Employment-population ratio, 16+ (EMRATIO)",
+         formula="Employed (16+) ÷ Civilian noninstitutional population 16+ × 100",
+         sources="EMRATIO (published). Numerator = CE16OV; denominator = CNP16OV.",
+         note="Drops the unemployed from the numerator vs CIVPART; still uses the 16+ denominator."),
+    dict(kind="definition", metric="Employment rate, 15-64 working age",
+         formula="Employed (15-64) ÷ Population 15-64 × 100",
+         sources="LREM64TTUSM156S (OECD/BLS, published).",
+         note="Closest published match to 'employed ÷ 18-65 population' — a true working-age base."),
+    dict(kind="definition", metric="Employment-population ratio, prime age 25-54",
+         formula="Employed (25-54) ÷ Civilian noninstitutional population 25-54 × 100",
+         sources="LNS12300060 (published).",
+         note="The economist's standard for core working-age employment; strips out students & retirees."),
+    dict(kind="definition", metric="Unemployment rates U-3 / U-6",
+         formula="U-3 = Unemployed ÷ labor force × 100.  U-6 = (Unemployed + marginally attached + "
+                 "part-time for economic reasons) ÷ (labor force + marginally attached) × 100",
+         sources="UNRATE (U-3), U6RATE (U-6), published.", note=""),
+    # --- derived in this pipeline -----------------------------------------
+    dict(kind="derived", metric="U-6 minus U-3 wedge",
+         formula="U6RATE − UNRATE  (percentage points)",
+         sources="U6RATE, UNRATE.",
+         note="Bucket-2 proxy: marginal attachment + involuntary part-time."),
+    dict(kind="derived", metric="BLS avg hourly earnings, YoY %",
+         formula="(AHE_t ÷ AHE_{t−12} − 1) × 100",
+         sources="CES0500000003 (level, $/hr).",
+         note="Converted to YoY % to compare against Indeed posted-wage growth."),
+    dict(kind="derived", metric="White-collar divergence (indexed)",
+         formula="series_t ÷ series_[2022-01] × 100",
+         sources="USPBS, USINFO, USFIRE, PAYEMS.",
+         note="Re-based to the window start so each line shows cumulative % change since 2022-01."),
+    dict(kind="derived", metric="Indeed white-collar / in-person composites",
+         formula="equal-weight mean of the member sectors' postings index, per day",
+         sources="job_postings_by_sector_US (white-collar = Software Dev, Data & Analytics, Banking & "
+                 "Finance, Marketing, Management, Project Mgmt, Media & Comms, HR, Accounting, Legal).",
+         note="Indeed's own index is Feb-2020 = 100, seasonally adjusted."),
+    dict(kind="derived", metric="Indeed posted-wage growth, YoY %",
+         formula="posted_wage_growth_yoy (fraction) × 100",
+         sources="posted-wage-growth-by-country.csv, filtered to United States.", note=""),
+    dict(kind="derived", metric="Payroll levels in millions of persons",
+         formula="BLS: thousands ÷ 1,000.   ADP: persons ÷ 1,000,000.",
+         sources="PAYEMS, USPRIV (thousands); ADPMNUSNERSA (persons).",
+         note="Unit-aligned so BLS and ADP plot at true comparable headcounts, un-indexed."),
 ]
 
 # ---------------------------------------------------------------------------

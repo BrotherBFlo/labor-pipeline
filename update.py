@@ -83,6 +83,11 @@ header h1{margin:0 0 4px;font-size:24px}header .sub{opacity:.9;font-size:13px}
 .moved{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;white-space:pre-wrap;line-height:1.55}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 a{color:var(--accent)}.foot{color:var(--muted);font-size:12px;margin-top:40px;text-align:center}
+table.calc{width:100%;border-collapse:collapse;margin:8px 0;font-size:12.5px}
+table.calc th{text-align:left;color:var(--muted);font-weight:600;border-bottom:2px solid var(--line);padding:6px 10px}
+table.calc td{vertical-align:top;border-bottom:1px solid var(--line);padding:8px 10px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#33415c}
+.calcnote{font-size:11.5px;color:var(--muted);margin-top:3px}
 @media(max-width:820px){.grid{grid-template-columns:1fr}}
 """
 
@@ -133,6 +138,27 @@ def _build_dashboard(chart_items, moved_lines, datasets, ts):
             parts.append("<div class='card'>")
             parts.append(c["div"])
             parts.append(f"<div class='note'>{escape(c['note'])}</div></div>")
+
+    # calculations & definitions
+    parts.append("<div class='panel'><h2>Definitions &amp; calculations</h2>"
+                 "<div class='note'>Every formula and its source series, so nothing is a black box. "
+                 "Note the participation rate is <i>not</i> employed ÷ total population — see the first row.</div>")
+    for kind, label in [("definition", "How published rates are constructed"),
+                        ("derived", "Derived in this pipeline")]:
+        items = [c for c in config.CALCULATIONS if c["kind"] == kind]
+        if not items:
+            continue
+        parts.append(f"<div class='section' style='margin-top:14px'>{escape(label)}</div>")
+        parts.append("<table class='calc'>")
+        parts.append("<tr><th>Metric</th><th>Formula</th><th>Source series</th></tr>")
+        for c in items:
+            note = f"<div class='calcnote'>{escape(c['note'])}</div>" if c.get("note") else ""
+            parts.append(
+                f"<tr><td><b>{escape(c['metric'])}</b>{note}</td>"
+                f"<td class='mono'>{escape(c['formula'])}</td>"
+                f"<td class='mono'>{escape(c['sources'])}</td></tr>")
+        parts.append("</table>")
+    parts.append("</div>")
 
     # caveats
     parts.append("<div class='caveat'><b>Methodology &amp; caveats</b><ul>")

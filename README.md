@@ -89,6 +89,11 @@ interpolated** — the Oct 2025 appropriations-lapse gap is preserved and marked
 - **Labor demand — JOLTS job-openings rate (BLS) vs Indeed total postings** (independent, near-real-time)
 - **Wage growth — BLS avg hourly earnings YoY vs Indeed posted-wage growth** (independent)
 
+The dashboard also carries a **Definitions & calculations** panel showing every metric's
+formula and source series (e.g. participation rate = (employed+unemployed, 16+) ÷ civ.
+noninstitutional pop 16+ — *not* employed ÷ total population; the prime-age 25-54 EPOP is
+the cleaner "employed ÷ working-age" read).
+
 Plus the bucket dashboard: frozen-market flows (hires/quits/layoffs), white-collar
 divergence (indexed), unemployment quality incl. bachelor's+, business formation,
 self-employment, U-6−U-3 wedge, weekly claims, participation vs labor force, and the

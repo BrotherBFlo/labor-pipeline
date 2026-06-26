@@ -187,6 +187,25 @@ def _participation_vs_force(m):
     return _finalize(fig, "The expanding workforce — participation vs labor force (denominator)", CITE_BLS)
 
 
+def _employment_ratios(m):
+    # Directly answers "employed ÷ working-age pop" vs the headline participation
+    # rate — same %, one axis, so the denominator/numerator differences are visible.
+    cols = [("emp_pop_ratio_prime", "Employed ÷ pop 25-54 (prime age)", ACCENTS[2]),
+            ("emp_rate_15_64", "Employed ÷ pop 15-64 (working age)", ACCENTS[5]),
+            ("emp_pop_ratio", "Employed ÷ pop 16+ (EPOP)", ACCENTS[4]),
+            ("civpart", "Labor force ÷ pop 16+ (participation)", GOV)]
+    if not any(_has(m, [c]) for c, _, _ in cols):
+        return None
+    fig = go.Figure()
+    for c, label, color in cols:
+        if _has(m, [c]):
+            fig.add_trace(go.Scatter(x=m.index, y=m[c], name=label, line=dict(color=color, width=2)))
+    fig.update_yaxes(title_text="percent")
+    return _finalize(fig, "Employment ratios — share of population that is employed, by age base",
+                     "Source: BLS via FRED (EMRATIO, LNS12300060, CIVPART) + OECD 15-64 (LREM64TTUSM156S). "
+                     "Prime-age 25-54 is the cleanest 'employed ÷ working-age' read.")
+
+
 def _claims(w):
     if not (_has(w, ["initial_claims"]) or _has(w, ["continued_claims"])):
         return None
@@ -333,6 +352,10 @@ def build_all(datasets):
          "Initial = new layoffs; continued = ongoing joblessness."),
         ("participation_vs_force", "Secondary axis — denominator", _participation_vs_force(m),
          "The expanding workforce: the denominator behind every rate."),
+        ("employment_ratios", "Secondary axis — denominator", _employment_ratios(m),
+         "Prime-age (25-54) employment ratio is what you want: employed ÷ working-age pop. "
+         "Headline participation reads lower because its 16+ denominator includes retirees & its "
+         "numerator counts the unemployed."),
         ("ai_share", "Thesis overlay", _ai_share(d),
          "AI-as-buyer thesis: rising share of postings referencing AI/GenAI."),
         ("nyfed_unemp", "New-entrant axis (NY Fed)", _nyfed_unemp(n),
