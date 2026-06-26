@@ -21,13 +21,17 @@ CITE_INDEED = "Source: Indeed Hiring Lab (CC BY 4.0)."
 
 
 def _finalize(fig, title, cite):
+    # Legend sits BELOW the plot (not at the top) so a multi-entry legend can
+    # never wrap up into the title. Title pinned top-left.
     fig.update_layout(
-        title=dict(text=title, font=dict(size=17)),
+        title=dict(text=title, font=dict(size=16), x=0.01, xanchor="left",
+                   y=0.97, yanchor="top"),
         template=TEMPLATE, hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
-        margin=dict(l=60, r=60, t=70, b=70), height=460,
+        legend=dict(orientation="h", yanchor="top", y=-0.16, xanchor="left", x=0,
+                    font=dict(size=11)),
+        margin=dict(l=60, r=60, t=52, b=110), height=500,
     )
-    fig.add_annotation(text=cite, xref="paper", yref="paper", x=0, y=-0.18,
+    fig.add_annotation(text=cite, xref="paper", yref="paper", x=0, y=-0.33,
                        showarrow=False, font=dict(size=10, color="#666"), align="left")
     return fig
 
@@ -211,10 +215,10 @@ def _participation_vs_force(m):
 def _employment_ratios(m):
     # Directly answers "employed ÷ working-age pop" vs the headline participation
     # rate — same %, one axis, so the denominator/numerator differences are visible.
-    cols = [("emp_pop_ratio_prime", "Employed ÷ pop 25-54 (prime age)", ACCENTS[2]),
-            ("emp_rate_15_64", "Employed ÷ pop 15-64 (working age)", ACCENTS[5]),
-            ("emp_pop_ratio", "Employed ÷ pop 16+ (EPOP)", ACCENTS[4]),
-            ("civpart", "Labor force ÷ pop 16+ (participation)", GOV)]
+    cols = [("emp_pop_ratio_prime", "Empl ÷ 25-54 (prime)", ACCENTS[2]),
+            ("emp_rate_15_64", "Empl ÷ 15-64 (working age)", ACCENTS[5]),
+            ("emp_pop_ratio", "Empl ÷ 16+ (EPOP)", ACCENTS[4]),
+            ("civpart", "Labor force ÷ 16+ (participation)", GOV)]
     if not any(_has(m, [c]) for c, _, _ in cols):
         return None
     fig = go.Figure()
@@ -364,7 +368,12 @@ def build_all(datasets):
         ("unemployment_quality", "Bucket 3 — unemployed", _unemployment_quality(m),
          "Bachelor's+ cut isolates the white-collar unemployment signal."),
         ("u6_u3_wedge", "Bucket 2 — paid not producing", _u6_u3_wedge(m),
-         "Proxy for marginal attachment + involuntary part-time."),
+         "U-3 (the headline/official rate): share of the labor force who are jobless, available "
+         "to work, and actively looked in the last 4 weeks. U-6 (the broadest measure): U-3 PLUS "
+         "marginally attached workers (want a job and looked in the last 12 months but not the "
+         "last 4 — includes discouraged workers) PLUS people working part-time because they can't "
+         "find full-time. The wedge (U-6 − U-3) is exactly that extra slack — underutilized labor "
+         "the headline rate misses, the bucket-2 'paid but not fully producing' signal."),
         ("business_formation", "Bucket 2 — paid not producing", _business_formation(m),
          "Partly modeled: formation can't confirm a corporate exit or revenue."),
         ("self_employment", "Bucket 2 — paid not producing", _self_employment(m),
