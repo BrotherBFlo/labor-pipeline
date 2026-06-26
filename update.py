@@ -89,8 +89,10 @@ table.calc td{vertical-align:top;border-bottom:1px solid var(--line);padding:8px
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:#33415c}
 .calcnote{font-size:11.5px;color:var(--muted);margin-top:3px}
 .mfilter{position:relative;display:inline-block;margin:2px 2px 10px}
-.mbtn{font-size:12px;padding:5px 11px;border:1px solid var(--line);background:#fff;border-radius:7px;cursor:pointer;color:var(--ink)}
-.mbtn:hover{border-color:var(--accent)}
+.mbtn,.tglbtn{font-size:12px;padding:5px 11px;border:1px solid var(--line);background:#fff;border-radius:7px;cursor:pointer;color:var(--ink)}
+.mbtn:hover,.tglbtn:hover{border-color:var(--accent)}
+.tglbtn{margin:2px 2px 10px 4px;font-weight:600}
+.tglbtn[hidden]{display:none}
 .mfilter .mpanel{display:none;position:absolute;z-index:50;top:32px;left:0;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 18px rgba(16,24,40,.14);padding:8px 10px;width:230px;max-height:330px;overflow:auto}
 .mfilter.open .mpanel{display:block}
 .mpanel-act{display:flex;gap:12px;margin-bottom:6px;border-bottom:1px solid var(--line);padding-bottom:6px;position:sticky;top:0;background:#fff}
@@ -109,7 +111,7 @@ table.calc td{vertical-align:top;border-bottom:1px solid var(--line);padding:8px
 """
 
 
-def _build_dashboard(chart_items, moved_lines, datasets, ts):
+def _build_dashboard(chart_items, moved_lines, datasets, ts, toggles=None):
     by_section = {}
     for c in chart_items:
         by_section.setdefault(c["section"], []).append(c)
@@ -157,7 +159,8 @@ def _build_dashboard(chart_items, moved_lines, datasets, ts):
                 "<div class='mfilter'><button class='mbtn' type='button'>Months &#9662;</button>"
                 "<div class='mpanel'><div class='mpanel-act'>"
                 "<a class='mall'>All</a><a class='mnone'>None</a></div>"
-                "<div class='mlist'></div></div></div>")
+                "<div class='mlist'></div></div></div>"
+                "<button class='tglbtn' type='button' hidden>Show counts</button>")
             parts.append("<div class='chartholder'>" + c["div"] + "</div>")
             parts.append(f"<div class='note'>{escape(c['note'])}</div></div>")
 
@@ -196,6 +199,7 @@ def _build_dashboard(chart_items, moved_lines, datasets, ts):
 
     parts.append("<div class='foot'>BLS &amp; Census via FRED · ADP via FRED · "
                  "Indeed Hiring Lab (CC BY 4.0). Personal research dashboard.</div>")
+    parts.append("<script>window.__toggle=" + json.dumps(toggles or {}) + ";</script>")
     parts.append(_MONTH_FILTER_JS)
     parts.append("</div></body></html>")
     return "".join(parts)
@@ -276,16 +280,36 @@ _MONTH_FILTER_JS = """
         });
         yn.appendChild(qwrap); list.appendChild(yn);
       });
+      // value modes: 'rate' (the rendered series) + optional 'count' from
+      // window.__toggle (per-trace level arrays, same x/order as the rate).
+      function lay(get,d){ try{ var v=get(); return v==null?d:v; }catch(e){ return d; } }
+      var modes={ rate:{ ys:orig.map(function(t){return t.y;}),
+        ytitle:lay(function(){return gd.layout.yaxis.title.text;},''),
+        title:lay(function(){return gd.layout.title.text;},'') } };
+      var curMode='rate';
+      var tg=(window.__toggle||{})[gd.id];
+      var tbtn=card.querySelector('.tglbtn');
+      if(tbtn&&tg&&tg.count&&tg.count.ys&&tg.count.ys.length===orig.length){
+        modes.count=tg.count;
+        tbtn.hidden=false; tbtn.textContent='Show counts';
+        tbtn.addEventListener('click',function(e){ e.preventDefault();
+          curMode=curMode==='rate'?'count':'rate';
+          tbtn.textContent=curMode==='rate'?'Show counts':'Show rates';
+          render(); });
+      }
       function setLabel(){ var n=list.querySelectorAll('.mcb:checked').length;
         btn.innerHTML='Months ('+n+'/'+total+') &#9662;'; }
-      function apply(){
+      function render(){
         var sel={};
         list.querySelectorAll('.mcb:checked').forEach(function(i){sel[i.value]=1;});
-        var xs=[], ys=[];
-        orig.forEach(function(t){var nx=[],ny=[];
-          for(var i=0;i<t.x.length;i++){ if(sel[String(t.x[i]).slice(0,7)]){nx.push(t.x[i]);ny.push(t.y[i]);} }
-          xs.push(nx); ys.push(ny);});
-        Plotly.restyle(gd,{x:xs,y:ys});
+        var ys=modes[curMode].ys, xs=[], nys=[];
+        for(var t=0;t<orig.length;t++){
+          var X=orig[t].x, Y=ys[t]||[], nx=[], ny=[];
+          for(var i=0;i<X.length;i++){ if(sel[String(X[i]).slice(0,7)]){ nx.push(X[i]); ny.push(Y[i]); } }
+          xs.push(nx); nys.push(ny);
+        }
+        Plotly.restyle(gd,{x:xs,y:nys});
+        Plotly.relayout(gd,{'yaxis.title.text':modes[curMode].ytitle,'title.text':modes[curMode].title});
         setLabel();
       }
       // roll child state up into quarter + year tri-state boxes
@@ -310,7 +334,7 @@ _MONTH_FILTER_JS = """
           var scope=cb.closest('.qnode')||cb.closest('.ynode');
           scope.querySelectorAll('.mcb').forEach(function(i){i.checked=cb.checked;});
         }
-        refreshUp(); apply();
+        refreshUp(); render();
       });
       // expand / collapse on the triangle or the label
       list.addEventListener('click',function(e){
@@ -326,7 +350,7 @@ _MONTH_FILTER_JS = """
       });
       btn.addEventListener('click',function(e){e.stopPropagation(); dd.classList.toggle('open');});
       dd.querySelector('.mpanel').addEventListener('click',function(e){e.stopPropagation();});
-      function bulk(v){ list.querySelectorAll('.mcb').forEach(function(i){i.checked=v;}); refreshUp(); apply(); }
+      function bulk(v){ list.querySelectorAll('.mcb').forEach(function(i){i.checked=v;}); refreshUp(); render(); }
       dd.querySelector('.mall').addEventListener('click',function(e){e.preventDefault(); bulk(true);});
       dd.querySelector('.mnone').addEventListener('click',function(e){e.preventDefault(); bulk(false);});
       setLabel();
@@ -366,7 +390,7 @@ def run(verify_only=False):
                                     nyfed=nyfed_df, nyfed_rows=nyfed_rows, geo=geo)
 
     print("\n[4/5] Charts...")
-    chart_items = charts.build_all(datasets)
+    chart_items, toggles = charts.build_all(datasets)
 
     print("\n[5/5] Dashboard + 'what moved' diff...")
     snap = _latest_values(datasets)
@@ -374,7 +398,7 @@ def run(verify_only=False):
 
     ts_label = dt.datetime.now().strftime("%Y-%m-%d %H:%M")
     ts_file = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
-    html = _build_dashboard(chart_items, moved_lines, datasets, ts_label)
+    html = _build_dashboard(chart_items, moved_lines, datasets, ts_label, toggles)
     dated = config.DASHBOARD_DIR / f"dashboard_{ts_file}.html"
     latest = config.DASHBOARD_DIR / "latest.html"
     dated.write_text(html)

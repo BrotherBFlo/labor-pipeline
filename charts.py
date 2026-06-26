@@ -46,6 +46,22 @@ def _has(df, cols):
     return df is not None and not df.empty and all(c in df.columns for c in cols)
 
 
+def _level_mode(m, level_cols, scale, ytitle, title):
+    """Build the 'count' toggle payload: per-trace y arrays (NaN->None, scaled),
+    aligned to the same x/order as the rate traces. Only if every level exists."""
+    if not all(c in m.columns for c in level_cols):
+        return None
+    ys = []
+    for c in level_cols:
+        s = m[c] / scale
+        ys.append([None if _pd_isna(v) else round(float(v), 4) for v in s])
+    return {"count": {"ys": ys, "ytitle": ytitle, "title": title}}
+
+
+def _pd_isna(v):
+    return v != v  # NaN-only check without importing pandas here
+
+
 # ---------------------------------------------------------------------------
 # Triangulation
 # ---------------------------------------------------------------------------
@@ -110,17 +126,22 @@ def _tri_earnings_vs_wages(m):
 # Bucket dashboard
 # ---------------------------------------------------------------------------
 def _flows(m):
-    cols = [("jolts_hires_rate", "Hires", ACCENTS[2]),
-            ("jolts_quits_rate", "Quits (voluntary)", ACCENTS[3]),
-            ("jolts_layoffs_rate", "Layoffs & discharges", ACCENTS[1])]
-    if not any(_has(m, [c]) for c, _, _ in cols):
+    # rate %, with an associated whole-number (level) mode -> returns (fig, levels)
+    cols = [("jolts_hires_rate", "jolts_hires_level", "Hires", ACCENTS[2]),
+            ("jolts_quits_rate", "jolts_quits_level", "Quits (voluntary)", ACCENTS[3]),
+            ("jolts_layoffs_rate", "jolts_layoffs_level", "Layoffs & discharges", ACCENTS[1])]
+    present = [(r, l, label, color) for r, l, label, color in cols if _has(m, [r])]
+    if not present:
         return None
     fig = go.Figure()
-    for c, label, color in cols:
-        if _has(m, [c]):
-            fig.add_trace(go.Scatter(x=m.index, y=m[c], name=label, line=dict(color=color, width=2)))
+    for r, l, label, color in present:
+        fig.add_trace(go.Scatter(x=m.index, y=m[r], name=label, line=dict(color=color, width=2)))
     fig.update_yaxes(title_text="rate (% of employment)")
-    return _finalize(fig, "Frozen-market flows — hires, quits, layoffs (JOLTS)", CITE_BLS)
+    fig = _finalize(fig, "Frozen-market flows — hires, quits, layoffs (JOLTS)", CITE_BLS)
+    levels = _level_mode(m, [l for _, l, _, _ in present], scale=1e3,
+                         ytitle="persons (millions)",
+                         title="Frozen-market flows — counts (hires, quits, layoffs), millions of persons")
+    return fig, levels
 
 
 def _white_collar_divergence(m):
@@ -370,8 +391,13 @@ def build_all(datasets):
          "Independent metro-level demand read (tech-heavy metros worth watching)."),
     ]
 
-    out = []
-    for cid, section, fig, note in specs:
+    import re
+    out, toggles = [], {}
+    for cid, section, res, note in specs:
+        levels = None
+        fig = res
+        if isinstance(res, tuple):       # builder returned (fig, levels)
+            fig, levels = res
         if fig is None:
             print(f"  [skip] chart {cid}: required columns missing")
             continue
@@ -380,7 +406,12 @@ def build_all(datasets):
                        full_html=True)
         div = fig.to_html(include_plotlyjs=False, full_html=False,
                           config={"displayModeBar": False})
+        # key the toggle payload by the plotly div id so the client can find it
+        if levels:
+            mobj = re.search(r'<div id="([^"]+)" class="plotly-graph-div"', div)
+            if mobj:
+                toggles[mobj.group(1)] = levels
         out.append(dict(id=cid, section=section, title=fig.layout.title.text,
                         div=div, note=note))
-        print(f"  [ok] chart {cid}")
-    return out
+        print(f"  [ok] chart {cid}" + ("  [+count toggle]" if levels else ""))
+    return out, toggles
