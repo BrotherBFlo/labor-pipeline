@@ -31,9 +31,12 @@ for _d in (DATA_DIR, CHARTS_DIR, DASHBOARD_DIR):
     _d.mkdir(exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# Date window (configurable). 2019-01-01 = pre-COVID baseline + full cycle.
+# Date window (configurable). 2022-01-01 keeps the post-COVID-normalization era
+# so scales stay legible — the 2020-21 spikes (6M initial claims, 14.7% U-3)
+# otherwise crush every level chart. Applied globally: FRED pulls use it as
+# observation_start; Indeed/geo/NY-Fed frames are clipped to it on assembly.
 # ---------------------------------------------------------------------------
-OBSERVATION_START = "2019-01-01"
+OBSERVATION_START = "2022-01-01"
 
 # FRED API
 FRED_BASE = "https://api.stlouisfed.org/fred"

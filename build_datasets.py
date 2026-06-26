@@ -137,6 +137,9 @@ def _wide_from_fred(fred_frames, fred_meta, freq):
 def _write_pair(df, name):
     """Write wide + tidy long. Wide preserves NaN as empty cells."""
     df = df.sort_index()
+    # global window clip — keeps Indeed-derived columns from reintroducing the
+    # pre-window (COVID-era) rows via the outer joins.
+    df = df[df.index >= pd.Timestamp(config.OBSERVATION_START)]
     df.index.name = "date"
     wide_path = config.DATA_DIR / f"{name}.csv"
     df.to_csv(wide_path, date_format="%Y-%m-%d")
@@ -152,10 +155,12 @@ def _write_geo(geo):
     """Write state (full) + metro (focus-subset) long files; return focus pivots."""
     focus = {}
     extra_rows = []
+    start = pd.Timestamp(config.OBSERVATION_START)
     st = geo.get("state_postings")
     if st is not None:
         s = st.copy()
         s["date"] = pd.to_datetime(s["date"])
+        s = s[s["date"] >= start]
         s.to_csv(config.DATA_DIR / "indeed_state_postings.csv", index=False, date_format="%Y-%m-%d")
         f = s[s["state"].isin(config.GEO_FOCUS_STATES)]
         focus["state"] = f.pivot_table(index="date", columns="state",
@@ -171,7 +176,7 @@ def _write_geo(geo):
         m = mt.copy()
         m["date"] = pd.to_datetime(m["date"])
         mask = m["metro"].str.contains("|".join(config.GEO_FOCUS_METROS), case=False, na=False)
-        m = m[mask]
+        m = m[mask & (m["date"] >= start)]
         m.to_csv(config.DATA_DIR / "indeed_metro_postings.csv", index=False, date_format="%Y-%m-%d")
         focus["metro"] = m.pivot_table(index="date", columns="metro",
                                        values="indeed_job_postings_index").sort_index()
