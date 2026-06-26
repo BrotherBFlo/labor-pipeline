@@ -91,13 +91,20 @@ table.calc td{vertical-align:top;border-bottom:1px solid var(--line);padding:8px
 .mfilter{position:relative;display:inline-block;margin:2px 2px 10px}
 .mbtn{font-size:12px;padding:5px 11px;border:1px solid var(--line);background:#fff;border-radius:7px;cursor:pointer;color:var(--ink)}
 .mbtn:hover{border-color:var(--accent)}
-.mfilter .mpanel{display:none;position:absolute;z-index:50;top:32px;left:0;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 18px rgba(16,24,40,.14);padding:8px 10px;width:215px;max-height:300px;overflow:auto}
+.mfilter .mpanel{display:none;position:absolute;z-index:50;top:32px;left:0;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 6px 18px rgba(16,24,40,.14);padding:8px 10px;width:230px;max-height:330px;overflow:auto}
 .mfilter.open .mpanel{display:block}
 .mpanel-act{display:flex;gap:12px;margin-bottom:6px;border-bottom:1px solid var(--line);padding-bottom:6px;position:sticky;top:0;background:#fff}
 .mpanel-act a{cursor:pointer;font-size:12px;color:var(--accent);font-weight:600}
-.mlist label{display:block;font-size:11.5px;padding:2px 1px;cursor:pointer;white-space:nowrap}
-.mlist input{margin-right:7px;vertical-align:-1px}
-.mlist .yrhdr{font-weight:700;color:var(--muted);margin:6px 0 2px;font-size:11px;letter-spacing:.04em}
+.mlist .trow{display:flex;align-items:center;gap:5px;padding:2px 0;font-size:12px;white-space:nowrap}
+.mlist .trow input{margin:0;vertical-align:middle}
+.mlist .tog{width:12px;display:inline-block;text-align:center;color:var(--muted);cursor:pointer;font-size:9px;user-select:none}
+.mlist .tog.ph{cursor:default}
+.mlist .lbl{cursor:pointer}
+.mlist .yrow .lbl{font-weight:700}
+.mlist .qrow .lbl{font-weight:600;color:#44546a}
+.mlist .qnode{margin-left:14px}
+.mlist .mrow{margin-left:14px}
+.mlist .mrow .lbl{font-size:11.5px;color:var(--ink)}
 @media(max-width:820px){.grid{grid-template-columns:1fr}}
 """
 
@@ -239,34 +246,90 @@ _MONTH_FILTER_JS = """
       orig.forEach(function(t){t.x.forEach(function(v){var m=String(v).slice(0,7);
         if(/^\\d{4}-\\d{2}$/.test(m)) seen[m]=1;});});
       var months=Object.keys(seen).sort();
+      var total=months.length;
       var list=dd.querySelector('.mlist'), btn=dd.querySelector('.mbtn');
-      var curYr=null;
+      list.innerHTML='';
+      // build year -> quarter -> [months] (only months present in the data)
+      var tree={};
       months.forEach(function(m){
-        var yr=m.slice(0,4);
-        if(yr!==curYr){curYr=yr; var h=document.createElement('div'); h.className='yrhdr'; h.textContent=yr; list.appendChild(h);}
-        var lab=document.createElement('label');
-        lab.innerHTML='<input type="checkbox" value="'+m+'" checked>'+m;
-        list.appendChild(lab);
+        var y=m.slice(0,4), mo=parseInt(m.slice(5,7),10), q='Q'+Math.ceil(mo/3);
+        (tree[y]=tree[y]||{}); (tree[y][q]=tree[y][q]||[]).push(m);
       });
-      function setLabel(n){ btn.innerHTML='Months ('+n+'/'+months.length+') &#9662;'; }
-      setLabel(months.length);
+      function row(cls,cbcls,label,val){
+        var r=document.createElement('div'); r.className='trow '+cls;
+        var tog = cls==='mrow' ? '<span class="tog ph"></span>' : '<span class="tog">&#9656;</span>';
+        var v = val!=null ? ' value="'+val+'"' : '';
+        r.innerHTML=tog+'<input type="checkbox" class="'+cbcls+'" checked'+v+'>'
+                    +'<span class="lbl">'+label+'</span>';
+        return r;
+      }
+      Object.keys(tree).sort().forEach(function(y){
+        var yn=document.createElement('div'); yn.className='ynode';
+        yn.appendChild(row('yrow','ycb',y));
+        var qwrap=document.createElement('div'); qwrap.className='subwrap'; qwrap.style.display='none';
+        Object.keys(tree[y]).sort().forEach(function(q){
+          var qn=document.createElement('div'); qn.className='qnode';
+          qn.appendChild(row('qrow','qcb',q));
+          var mwrap=document.createElement('div'); mwrap.className='subwrap'; mwrap.style.display='none';
+          tree[y][q].forEach(function(m){ mwrap.appendChild(row('mrow','mcb',m,m)); });
+          qn.appendChild(mwrap); qwrap.appendChild(qn);
+        });
+        yn.appendChild(qwrap); list.appendChild(yn);
+      });
+      function setLabel(){ var n=list.querySelectorAll('.mcb:checked').length;
+        btn.innerHTML='Months ('+n+'/'+total+') &#9662;'; }
       function apply(){
-        var sel={}, n=0;
-        list.querySelectorAll('input:checked').forEach(function(i){sel[i.value]=1;n++;});
+        var sel={};
+        list.querySelectorAll('.mcb:checked').forEach(function(i){sel[i.value]=1;});
         var xs=[], ys=[];
         orig.forEach(function(t){var nx=[],ny=[];
           for(var i=0;i<t.x.length;i++){ if(sel[String(t.x[i]).slice(0,7)]){nx.push(t.x[i]);ny.push(t.y[i]);} }
           xs.push(nx); ys.push(ny);});
         Plotly.restyle(gd,{x:xs,y:ys});
-        setLabel(n);
+        setLabel();
       }
-      list.addEventListener('change',apply);
+      // roll child state up into quarter + year tri-state boxes
+      function refreshUp(){
+        list.querySelectorAll('.qnode').forEach(function(qn){
+          var ms=qn.querySelectorAll('.mcb'), c=0;
+          ms.forEach(function(i){if(i.checked)c++;});
+          var qcb=qn.querySelector('.qcb');
+          qcb.checked=c===ms.length; qcb.indeterminate=c>0&&c<ms.length;
+        });
+        list.querySelectorAll('.ynode').forEach(function(yn){
+          var qs=yn.querySelectorAll('.qcb'), full=0,any=0;
+          qs.forEach(function(i){ if(i.checked)full++; if(i.checked||i.indeterminate)any++; });
+          var ycb=yn.querySelector('.ycb');
+          ycb.checked=full===qs.length; ycb.indeterminate=full!==qs.length&&any>0;
+        });
+      }
+      // cascade a year/quarter checkbox down to all its months
+      list.addEventListener('change',function(e){
+        var cb=e.target;
+        if(cb.classList.contains('ycb')||cb.classList.contains('qcb')){
+          var scope=cb.closest('.qnode')||cb.closest('.ynode');
+          scope.querySelectorAll('.mcb').forEach(function(i){i.checked=cb.checked;});
+        }
+        refreshUp(); apply();
+      });
+      // expand / collapse on the triangle or the label
+      list.addEventListener('click',function(e){
+        var t=e.target;
+        if(!(t.classList.contains('tog')||t.classList.contains('lbl'))) return;
+        if(t.classList.contains('ph')) return;
+        var r=t.closest('.trow'); if(r.classList.contains('mrow')) return;
+        var node=r.parentNode, sub=node.children[1];
+        if(!sub) return;
+        var hide=sub.style.display==='none';
+        sub.style.display=hide?'block':'none';
+        var tog=r.querySelector('.tog'); if(tog) tog.innerHTML=hide?'&#9662;':'&#9656;';
+      });
       btn.addEventListener('click',function(e){e.stopPropagation(); dd.classList.toggle('open');});
       dd.querySelector('.mpanel').addEventListener('click',function(e){e.stopPropagation();});
-      dd.querySelector('.mall').addEventListener('click',function(e){e.preventDefault();
-        list.querySelectorAll('input').forEach(function(i){i.checked=true;}); apply();});
-      dd.querySelector('.mnone').addEventListener('click',function(e){e.preventDefault();
-        list.querySelectorAll('input').forEach(function(i){i.checked=false;}); apply();});
+      function bulk(v){ list.querySelectorAll('.mcb').forEach(function(i){i.checked=v;}); refreshUp(); apply(); }
+      dd.querySelector('.mall').addEventListener('click',function(e){e.preventDefault(); bulk(true);});
+      dd.querySelector('.mnone').addEventListener('click',function(e){e.preventDefault(); bulk(false);});
+      setLabel();
   }
   if(document.readyState==='complete'){ init(); }
   else { window.addEventListener('load',init); }
